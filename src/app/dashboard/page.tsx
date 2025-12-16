@@ -1,26 +1,75 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   FileText,
-  Upload,
   LogOut,
   Loader2,
   Plus,
   MessageSquare,
   Clock,
-  Sparkles,
   Search,
   MoreHorizontal,
   FolderOpen,
   Moon,
   Sun,
+  Trash2,
+  RefreshCw,
+  AlertCircle,
+  CheckCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useAuth } from "@/components/auth-provider";
+import { DocumentUpload } from "@/components/document-upload";
+import type { Document, DocumentStatus } from "@/lib/db";
+
+const statusConfig: Record<DocumentStatus, { label: string; color: string; icon: React.ReactNode }> = {
+  pending: {
+    label: "Pending",
+    color: "text-gray-500 bg-gray-100 dark:bg-gray-800",
+    icon: <Clock className="h-3 w-3" />,
+  },
+  processing: {
+    label: "Processing",
+    color: "text-amber-600 bg-amber-100 dark:bg-amber-500/20",
+    icon: <RefreshCw className="h-3 w-3 animate-spin" />,
+  },
+  ready: {
+    label: "Ready",
+    color: "text-green-600 bg-green-100 dark:bg-green-500/20",
+    icon: <CheckCircle className="h-3 w-3" />,
+  },
+  failed: {
+    label: "Failed",
+    color: "text-red-600 bg-red-100 dark:bg-red-500/20",
+    icon: <AlertCircle className="h-3 w-3" />,
+  },
+};
+
+function formatFileSize(bytes: number | null): string {
+  if (!bytes) return "Unknown";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatDate(date: Date | string): string {
+  const d = new Date(date);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return d.toLocaleDateString();
+}
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -28,6 +77,9 @@ export default function DashboardPage() {
   const { user, isLoading, isAuthenticated, refreshUser, signOut } = useAuth();
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [isLoadingDocs, setIsLoadingDocs] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -49,6 +101,66 @@ export default function DashboardPage() {
     }
   }, [hasCheckedAuth, isLoading, isAuthenticated, router]);
 
+  // Fetch documents
+  const fetchDocuments = useCallback(async () => {
+    try {
+      const response = await fetch("/api/documents");
+      if (response.ok) {
+        const data = await response.json();
+        setDocuments(data.documents);
+      }
+    } catch (error) {
+      console.error("Failed to fetch documents:", error);
+    } finally {
+      setIsLoadingDocs(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchDocuments();
+    }
+  }, [isAuthenticated, fetchDocuments]);
+
+  // Poll for processing documents
+  useEffect(() => {
+    const hasProcessingDocs = documents.some(
+      (doc) => doc.status === "processing" || doc.status === "pending"
+    );
+
+    if (!hasProcessingDocs) return;
+
+    const interval = setInterval(() => {
+      fetchDocuments();
+    }, 5000); // Poll every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [documents, fetchDocuments]);
+
+  const handleUploadComplete = useCallback(() => {
+    // Refresh documents list after upload
+    fetchDocuments();
+  }, [fetchDocuments]);
+
+  const handleDeleteDocument = async (docId: string) => {
+    if (deletingId) return;
+
+    setDeletingId(docId);
+    try {
+      const response = await fetch(`/api/documents/${docId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        setDocuments((prev) => prev.filter((d) => d.id !== docId));
+      }
+    } catch (error) {
+      console.error("Failed to delete document:", error);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const showLoading = isLoading || !hasCheckedAuth;
 
   if (showLoading || !isAuthenticated) {
@@ -60,16 +172,14 @@ export default function DashboardPage() {
   }
 
   const firstName = user?.email?.split("@")[0] || "there";
-
-  // Placeholder recent documents
-  const recentDocuments: { name: string; pages: number; date: string; type: string }[] = [];
+  const readyDocs = documents.filter((d) => d.status === "ready");
 
   return (
     <div className="relative min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Background gradient */}
       <div className="fixed inset-0 -z-10">
         <div className="absolute inset-0 bg-gradient-to-b from-violet-50/50 via-white to-white dark:from-gray-950 dark:via-gray-950 dark:to-gray-950" />
-        <div className="absolute top-0 right-0 h-[500px] w-[500px] rounded-full bg-gradient-to-r from-violet-400/10 to-indigo-400/10 blur-3xl dark:from-violet-600/5 dark:to-indigo-600/5" />
+        <div className="absolute right-0 top-0 h-[500px] w-[500px] rounded-full bg-gradient-to-r from-violet-400/10 to-indigo-400/10 blur-3xl dark:from-violet-600/5 dark:to-indigo-600/5" />
         <div className="absolute bottom-0 left-0 h-[400px] w-[400px] rounded-full bg-gradient-to-r from-blue-400/10 to-cyan-400/10 blur-3xl dark:from-blue-600/5 dark:to-cyan-600/5" />
       </div>
 
@@ -80,13 +190,13 @@ export default function DashboardPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 shadow-lg shadow-violet-500/25">
               <FileText className="h-5 w-5 text-white" />
             </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-xl font-bold text-transparent">
               DocTalk
             </span>
           </Link>
 
           {/* Search bar */}
-          <div className="hidden md:flex flex-1 max-w-md mx-8">
+          <div className="mx-8 hidden max-w-md flex-1 md:flex">
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
@@ -117,7 +227,7 @@ export default function DashboardPage() {
 
             {/* User menu */}
             <div className="flex items-center gap-3">
-              <div className="hidden sm:block text-right">
+              <div className="hidden text-right sm:block">
                 <p className="text-sm font-medium text-gray-900 dark:text-white">
                   {firstName}
                 </p>
@@ -171,20 +281,23 @@ export default function DashboardPage() {
               description: "Start a conversation",
               color: "from-violet-600 to-indigo-600",
               shadow: "shadow-violet-500/25",
+              count: null,
             },
             {
-              icon: Upload,
-              title: "Upload",
-              description: "Add new document",
+              icon: FileText,
+              title: "Documents",
+              description: `${documents.length} total`,
               color: "from-pink-600 to-rose-600",
               shadow: "shadow-pink-500/25",
+              count: documents.length,
             },
             {
               icon: FolderOpen,
-              title: "Browse",
-              description: "View all documents",
+              title: "Ready",
+              description: `${readyDocs.length} processed`,
               color: "from-blue-600 to-cyan-600",
               shadow: "shadow-blue-500/25",
+              count: readyDocs.length,
             },
             {
               icon: Clock,
@@ -192,8 +305,9 @@ export default function DashboardPage() {
               description: "Continue where you left",
               color: "from-amber-600 to-orange-600",
               shadow: "shadow-amber-500/25",
+              count: null,
             },
-          ].map((action, index) => (
+          ].map((action) => (
             <button
               key={action.title}
               className="group relative overflow-hidden rounded-2xl border border-gray-200/50 bg-white p-5 text-left transition-all hover:border-gray-300 hover:shadow-lg dark:border-gray-800/50 dark:bg-gray-900/50 dark:hover:border-gray-700"
@@ -220,38 +334,10 @@ export default function DashboardPage() {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="mb-8"
         >
-          <div className="relative overflow-hidden rounded-2xl border-2 border-dashed border-gray-300 bg-white/50 transition-all hover:border-violet-400 hover:bg-violet-50/30 dark:border-gray-700 dark:bg-gray-900/30 dark:hover:border-violet-500 dark:hover:bg-violet-500/5">
-            {/* Decorative gradient */}
-            <div className="absolute inset-0 -z-10 bg-gradient-to-br from-violet-500/5 via-transparent to-indigo-500/5" />
-
-            <div className="p-12 text-center">
-              <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-100 to-indigo-100 dark:from-violet-500/20 dark:to-indigo-500/20">
-                <Upload className="h-10 w-10 text-violet-600 dark:text-violet-400" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Drop your documents here
-              </h3>
-              <p className="mx-auto mt-2 max-w-sm text-gray-500 dark:text-gray-400">
-                Drag and drop your PDF, Word, or text files, or click to browse
-                from your computer
-              </p>
-              <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-                <button className="group flex items-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition-all hover:shadow-xl hover:shadow-violet-500/30 hover:scale-105">
-                  <Upload className="h-4 w-4" />
-                  Choose files
-                </button>
-                <span className="text-sm text-gray-400 dark:text-gray-500">
-                  or drag & drop
-                </span>
-              </div>
-              <p className="mt-4 text-xs text-gray-400 dark:text-gray-500">
-                Supports PDF, DOCX, TXT, MD • Max 10MB per file
-              </p>
-            </div>
-          </div>
+          <DocumentUpload onUploadComplete={handleUploadComplete} />
         </motion.div>
 
-        {/* Recent documents section */}
+        {/* Documents section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -259,46 +345,84 @@ export default function DashboardPage() {
         >
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              Recent Documents
+              Your Documents
             </h2>
-            <button className="text-sm font-medium text-violet-600 hover:text-violet-500 dark:text-violet-400">
-              View all
+            <button
+              onClick={fetchDocuments}
+              className="flex items-center gap-1 text-sm font-medium text-violet-600 hover:text-violet-500 dark:text-violet-400"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh
             </button>
           </div>
 
-          {recentDocuments.length > 0 ? (
+          {isLoadingDocs ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
+            </div>
+          ) : documents.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {recentDocuments.map((doc, index) => (
-                <div
-                  key={index}
-                  className="group relative overflow-hidden rounded-xl border border-gray-200/50 bg-white p-5 transition-all hover:border-gray-300 hover:shadow-lg dark:border-gray-800/50 dark:bg-gray-900/50 dark:hover:border-gray-700"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 dark:from-violet-500/20 dark:to-indigo-500/20">
-                        <FileText className="h-6 w-6 text-violet-600 dark:text-violet-400" />
+              {documents.map((doc) => {
+                const status = statusConfig[doc.status];
+                return (
+                  <div
+                    key={doc.id}
+                    className="group relative overflow-hidden rounded-xl border border-gray-200/50 bg-white p-5 transition-all hover:border-gray-300 hover:shadow-lg dark:border-gray-800/50 dark:bg-gray-900/50 dark:hover:border-gray-700"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 dark:from-violet-500/20 dark:to-indigo-500/20">
+                          <FileText className="h-6 w-6 text-violet-600 dark:text-violet-400" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="truncate font-medium text-gray-900 dark:text-white">
+                            {doc.filename}
+                          </h3>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {formatFileSize(doc.file_size)} - {formatDate(doc.created_at)}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="font-medium text-gray-900 dark:text-white">
-                          {doc.name}
-                        </h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {doc.pages} pages • {doc.date}
-                        </p>
-                      </div>
+                      <button
+                        onClick={() => handleDeleteDocument(doc.id)}
+                        disabled={deletingId === doc.id}
+                        className="rounded-lg p-2 text-gray-400 opacity-0 transition-all hover:bg-red-50 hover:text-red-600 group-hover:opacity-100 disabled:opacity-50 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+                      >
+                        {deletingId === doc.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </button>
                     </div>
-                    <button className="rounded-lg p-2 text-gray-400 opacity-0 transition-all hover:bg-gray-100 hover:text-gray-600 group-hover:opacity-100 dark:hover:bg-gray-800 dark:hover:text-gray-300">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </button>
+
+                    <div className="mt-4 flex items-center justify-between">
+                      <div
+                        className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${status.color}`}
+                      >
+                        {status.icon}
+                        {status.label}
+                      </div>
+
+                      {doc.status === "ready" && (
+                        <button className="flex items-center gap-1 rounded-lg bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-600 transition-colors hover:bg-violet-100 dark:bg-violet-500/10 dark:text-violet-400 dark:hover:bg-violet-500/20">
+                          <MessageSquare className="h-3 w-3" />
+                          Chat
+                        </button>
+                      )}
+
+                      {doc.status === "failed" && doc.error_message && (
+                        <span
+                          className="max-w-[150px] truncate text-xs text-red-500"
+                          title={doc.error_message}
+                        >
+                          {doc.error_message}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="mt-4 flex items-center gap-2">
-                    <button className="flex items-center gap-1 rounded-lg bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-600 transition-colors hover:bg-violet-100 dark:bg-violet-500/10 dark:text-violet-400 dark:hover:bg-violet-500/20">
-                      <MessageSquare className="h-3 w-3" />
-                      Chat
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="relative overflow-hidden rounded-2xl border border-gray-200/50 bg-white/50 dark:border-gray-800/50 dark:bg-gray-900/30">
@@ -314,10 +438,6 @@ export default function DashboardPage() {
                   Upload your first document to start chatting with your content
                   using AI
                 </p>
-                <button className="mt-6 flex items-center gap-2 rounded-full border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-400 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-gray-600 dark:hover:bg-gray-700">
-                  <Sparkles className="h-4 w-4" />
-                  Get started with a sample
-                </button>
               </div>
             </div>
           )}

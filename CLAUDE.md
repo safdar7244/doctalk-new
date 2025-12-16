@@ -12,6 +12,8 @@ DocTalk is an AI-powered SaaS application that allows users to upload documents 
 - **Theme**: next-themes (dark/light mode support)
 - **Fonts**: Geist Sans & Geist Mono
 - **Authentication**: AWS Cognito via `@aws-sdk/client-cognito-identity-provider`
+- **Storage**: AWS S3 via `@aws-sdk/client-s3` & `@aws-sdk/s3-request-presigner`
+- **Database**: PostgreSQL with pgvector via `pg`
 
 ## Project Structure
 ```
@@ -22,15 +24,26 @@ src/
 │   ├── globals.css          # Global styles & Tailwind config
 │   ├── actions/
 │   │   └── auth.ts          # Server actions for authentication
+│   ├── api/
+│   │   ├── upload/
+│   │   │   └── presigned/
+│   │   │       └── route.ts # Generate S3 presigned URLs for upload
+│   │   └── documents/
+│   │       ├── route.ts     # List documents (GET)
+│   │       └── [id]/
+│   │           └── route.ts # Get/Delete/Update document (GET/DELETE/PATCH)
 │   ├── signup/
 │   │   └── page.tsx         # Sign up page
 │   ├── login/
 │   │   └── page.tsx         # Login page
-│   └── verify-email/
-│       └── page.tsx         # Email verification page
+│   ├── verify-email/
+│   │   └── page.tsx         # Email verification page
+│   └── dashboard/
+│       └── page.tsx         # Dashboard with document upload & list
 ├── components/
 │   ├── theme-provider.tsx   # Dark/light mode provider
 │   ├── auth-provider.tsx    # Authentication context provider
+│   ├── document-upload.tsx  # Drag-and-drop document upload component
 │   └── landing/
 │       ├── index.ts         # Barrel exports
 │       ├── header.tsx       # Navigation header
@@ -41,7 +54,10 @@ src/
 │       ├── cta.tsx          # Call-to-action section
 │       └── footer.tsx
 ├── lib/
-│   └── cognito.ts           # AWS Cognito client & utilities
+│   ├── cognito.ts           # AWS Cognito client & utilities
+│   ├── auth-api.ts          # Auth helper for API routes
+│   ├── s3.ts                # S3 client & presigned URL generation
+│   └── db.ts                # PostgreSQL database client & queries
 ```
 
 ## Authentication (AWS Cognito)
@@ -135,16 +151,66 @@ npm run lint   # Run ESLint
 - `/verify-email` - Email verification with 6-digit code
 - `/login` - Login page (redirects to /dashboard on success)
 - `/forgot-password` - Password reset (not yet implemented)
-- `/dashboard` - Main app dashboard (not yet implemented)
+- `/dashboard` - Dashboard with document upload and management
+
+## API Routes
+- `POST /api/upload/presigned` - Generate presigned URL for S3 upload
+- `GET /api/documents` - List user's documents (with pagination)
+- `GET /api/documents/[id]` - Get document by ID
+- `DELETE /api/documents/[id]` - Delete document
+- `PATCH /api/documents/[id]` - Update document status
+
+## Document Upload Flow
+1. User selects/drops files on the upload component
+2. Frontend requests presigned URL from `/api/upload/presigned`
+3. Document record created in DB with `pending` status
+4. Frontend uploads file directly to S3 using presigned URL
+5. Document status updated to `processing`
+6. S3 event triggers SQS → Lambda for parsing
+7. Lambda parses document, creates chunks in DB
+8. Document status updated to `ready`
+9. Dashboard polls for status updates every 5 seconds
 
 ## Pending Features
 - [ ] Forgot password flow
-- [ ] Dashboard (document upload, chat interface)
-- [ ] Document upload functionality
-- [ ] AI chat integration
+- [ ] Lambda function for document parsing
+- [ ] Embeddings generation (OpenAI)
+- [ ] AI chat integration with RAG
 - [ ] User profile/settings
 - [ ] Subscription/payment integration
 - [ ] Social login (Google, GitHub) - buttons exist but not wired up
+- [ ] Document search functionality
+
+## AWS Infrastructure
+
+The app uses the following AWS services:
+- **S3**: Document storage (`doctalk-documents-xxx` bucket)
+- **SQS**: Document processing queue (`doctalk-document-processing`)
+- **Lambda**: Document parser (`doctalk-document-processor`)
+- **RDS**: PostgreSQL with pgvector (`doctalk-db`)
+- **Cognito**: User authentication
+
+See `docs/aws-infrastructure-setup.md` for detailed setup instructions.
+
+### Environment Variables
+```env
+# AWS Credentials (for S3)
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=AKIA...
+AWS_SECRET_ACCESS_KEY=...
+S3_BUCKET_NAME=doctalk-documents-YOUR_ACCOUNT_ID
+
+# Database
+DATABASE_URL=postgresql://postgres:password@host:5432/doctalk
+
+# Cognito
+NEXT_PUBLIC_AWS_REGION=us-east-1
+NEXT_PUBLIC_COGNITO_USER_POOL_ID=us-east-1_xxx
+NEXT_PUBLIC_COGNITO_CLIENT_ID=xxx
+
+# OpenAI (for future use)
+OPENAI_API_KEY=sk-...
+```
 
 ## Notes
 - All components use `"use client"` directive for client-side interactivity
