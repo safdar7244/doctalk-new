@@ -1,0 +1,18 @@
+# AWS SDK
+boto3==1.35.0
+
+# LangChain core
+langchain==0.1.0
+langchain-community==0.0.13
+langchain-openai==0.0.2
+
+# Database
+psycopg2-binary==2.9.11
+
+# Document loaders (these come with langchain-community but explicit for clarity)
+pypdf==3.17.4                 # PDF parsing
+python-docx==1.1.0            # DOCX parsing
+unstructured==0.11.8          # Additional format support
+
+# Utilities
+python-dotenv==1.0.0          # Dev environment management

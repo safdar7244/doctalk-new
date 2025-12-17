@@ -1,0 +1,20 @@
+#!/bin/bash
+# Option 2: Move Lambda to RDS VPC (More secure for production)
+
+echo "Moving Lambda to RDS VPC..."
+echo ""
+echo "⚠️  WARNING: You need to provide subnet IDs from the RDS VPC"
+echo "RDS VPC ID: vpc-0ad19d7aae4b9ba52"
+echo ""
+echo "Steps:"
+echo "1. Find private subnets in RDS VPC:"
+echo "   aws ec2 describe-subnets --filters 'Name=vpc-id,Values=vpc-0ad19d7aae4b9ba52' --query 'Subnets[*].[SubnetId,AvailabilityZone,CidrBlock]' --output table"
+echo ""
+echo "2. Update Lambda VPC configuration:"
+echo "   aws lambda update-function-configuration \\"
+echo "     --function-name doctalk-document-processor \\"
+echo "     --vpc-config SubnetIds=subnet-xxx,subnet-yyy,SecurityGroupIds=sg-09a9bbec3e7f23447"
+echo ""
+echo "3. Ensure subnets have NAT Gateway for outbound internet access (needed for OpenAI API)"
+echo ""
+echo "This is the recommended approach for production but requires more setup."

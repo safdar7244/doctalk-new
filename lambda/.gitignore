@@ -1,0 +1,28 @@
+# Build artifacts
+package/
+lambda-package.zip
+*.pyc
+__pycache__/
+.pytest_cache/
+
+# Environment files
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Testing
+coverage/
+.coverage
+htmlcov/
