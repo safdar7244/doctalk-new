@@ -405,10 +405,13 @@ export default function DashboardPage() {
                       </div>
 
                       {doc.status === "ready" && (
-                        <button className="flex items-center gap-1 rounded-lg bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-600 transition-colors hover:bg-violet-100 dark:bg-violet-500/10 dark:text-violet-400 dark:hover:bg-violet-500/20">
+                        <Link
+                          href={`/chat/${doc.id}`}
+                          className="flex items-center gap-1 rounded-lg bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-600 transition-colors hover:bg-violet-100 dark:bg-violet-500/10 dark:text-violet-400 dark:hover:bg-violet-500/20"
+                        >
                           <MessageSquare className="h-3 w-3" />
                           Chat
-                        </button>
+                        </Link>
                       )}
 
                       {doc.status === "failed" && doc.error_message && (
