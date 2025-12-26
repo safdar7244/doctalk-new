@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   FileText,
@@ -18,6 +18,8 @@ import {
   RefreshCw,
   AlertCircle,
   CheckCircle,
+  X,
+  Settings,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -80,6 +82,7 @@ export default function DashboardPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoadingDocs, setIsLoadingDocs] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     setMounted(true);
@@ -132,7 +135,7 @@ export default function DashboardPage() {
 
     const interval = setInterval(() => {
       fetchDocuments();
-    }, 5000); // Poll every 5 seconds
+    }, 10000); // Poll every 10 seconds
 
     return () => clearInterval(interval);
   }, [documents, fetchDocuments]);
@@ -161,6 +164,39 @@ export default function DashboardPage() {
     }
   };
 
+  // Filter documents based on search query
+  const filteredDocuments = useMemo(() => {
+    if (!searchQuery.trim()) return documents;
+
+    const query = searchQuery.toLowerCase().trim();
+
+    return documents.filter((doc) => {
+      // Search by filename
+      if (doc.filename.toLowerCase().includes(query)) return true;
+
+      // Search by file extension
+      const extension = doc.filename.split('.').pop()?.toLowerCase();
+      if (extension?.includes(query)) return true;
+
+      // Search by status
+      if (doc.status.toLowerCase().includes(query)) return true;
+
+      // Search by file size (e.g., "kb", "mb")
+      const sizeStr = formatFileSize(doc.file_size).toLowerCase();
+      if (sizeStr.includes(query)) return true;
+
+      // Search by date (e.g., "today", "yesterday", time ago format)
+      const dateStr = formatDate(doc.created_at).toLowerCase();
+      if (dateStr.includes(query)) return true;
+
+      return false;
+    });
+  }, [documents, searchQuery]);
+
+  const handleClearSearch = () => {
+    setSearchQuery("");
+  };
+
   const showLoading = isLoading || !hasCheckedAuth;
 
   if (showLoading || !isAuthenticated) {
@@ -173,6 +209,7 @@ export default function DashboardPage() {
 
   const firstName = user?.email?.split("@")[0] || "there";
   const readyDocs = documents.filter((d) => d.status === "ready");
+  const hasSearchQuery = searchQuery.trim().length > 0;
 
   return (
     <div className="relative min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -202,12 +239,32 @@ export default function DashboardPage() {
               <input
                 type="text"
                 placeholder="Search documents..."
-                className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 dark:border-gray-800 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-10 pr-10 text-sm text-gray-900 placeholder:text-gray-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 dark:border-gray-800 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"
               />
+              {hasSearchQuery && (
+                <button
+                  onClick={handleClearSearch}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  aria-label="Clear search"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
             </div>
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Settings link */}
+            <Link
+              href="/settings"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white transition-colors hover:bg-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800"
+              title="Settings"
+            >
+              <Settings className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+            </Link>
+
             {/* Theme toggle */}
             <button
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -265,6 +322,29 @@ export default function DashboardPage() {
           <p className="mt-2 text-gray-600 dark:text-gray-400">
             Upload documents and start chatting with your content
           </p>
+
+          {/* Mobile search bar */}
+          <div className="mt-4 md:hidden">
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search documents..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-10 pr-10 text-sm text-gray-900 placeholder:text-gray-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 dark:border-gray-800 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"
+              />
+              {hasSearchQuery && (
+                <button
+                  onClick={handleClearSearch}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  aria-label="Clear search"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
         </motion.div>
 
         {/* Quick actions */}
@@ -344,9 +424,16 @@ export default function DashboardPage() {
           transition={{ duration: 0.5, delay: 0.3 }}
         >
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              Your Documents
-            </h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Your Documents
+              </h2>
+              {hasSearchQuery && (
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  {filteredDocuments.length} of {documents.length} documents
+                </span>
+              )}
+            </div>
             <button
               onClick={fetchDocuments}
               className="flex items-center gap-1 text-sm font-medium text-violet-600 hover:text-violet-500 dark:text-violet-400"
@@ -360,9 +447,9 @@ export default function DashboardPage() {
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
             </div>
-          ) : documents.length > 0 ? (
+          ) : filteredDocuments.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {documents.map((doc) => {
+              {filteredDocuments.map((doc) => {
                 const status = statusConfig[doc.status];
                 return (
                   <div
@@ -426,6 +513,27 @@ export default function DashboardPage() {
                   </div>
                 );
               })}
+            </div>
+          ) : hasSearchQuery ? (
+            <div className="relative overflow-hidden rounded-2xl border border-gray-200/50 bg-white/50 dark:border-gray-800/50 dark:bg-gray-900/30">
+              <div className="absolute inset-0 -z-10 bg-gradient-to-br from-gray-500/5 via-transparent to-gray-500/5" />
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800">
+                  <Search className="h-8 w-8 text-gray-400 dark:text-gray-500" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  No documents found
+                </h3>
+                <p className="mt-2 max-w-sm text-gray-500 dark:text-gray-400">
+                  No documents match "{searchQuery}". Try a different search term.
+                </p>
+                <button
+                  onClick={handleClearSearch}
+                  className="mt-4 rounded-lg bg-violet-50 px-4 py-2 text-sm font-medium text-violet-600 transition-colors hover:bg-violet-100 dark:bg-violet-500/10 dark:text-violet-400 dark:hover:bg-violet-500/20"
+                >
+                  Clear search
+                </button>
+              </div>
             </div>
           ) : (
             <div className="relative overflow-hidden rounded-2xl border border-gray-200/50 bg-white/50 dark:border-gray-800/50 dark:bg-gray-900/30">

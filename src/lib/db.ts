@@ -271,3 +271,83 @@ export async function deleteChat(chatId: string, userId: string): Promise<boolea
 
   return (result.rowCount ?? 0) > 0;
 }
+
+export interface UserStats {
+  documents: {
+    total: number;
+    ready: number;
+    processing: number;
+    failed: number;
+    totalStorageBytes: number;
+    firstUploadDate: string | null;
+  };
+  chats: {
+    total: number;
+    totalMessages: number;
+    lastActivity: string | null;
+  };
+  chunks: {
+    total: number;
+  };
+}
+
+export async function getUserStats(userId: string): Promise<UserStats> {
+  // Get document statistics
+  const documentsQuery = await pool.query(
+    `SELECT
+      COUNT(*) as total_documents,
+      COUNT(CASE WHEN status = 'ready' THEN 1 END) as ready_documents,
+      COUNT(CASE WHEN status = 'processing' THEN 1 END) as processing_documents,
+      COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed_documents,
+      COALESCE(SUM(file_size), 0) as total_storage_bytes,
+      MIN(created_at) as first_document_date
+    FROM documents
+    WHERE user_id = $1`,
+    [userId]
+  );
+
+  // Get chat statistics
+  const chatsQuery = await pool.query(
+    `SELECT
+      COUNT(DISTINCT c.id) as total_chats,
+      COUNT(m.id) as total_messages,
+      MAX(m.created_at) as last_message_date
+    FROM chats c
+    LEFT JOIN messages m ON c.id = m.chat_id
+    WHERE c.user_id = $1`,
+    [userId]
+  );
+
+  // Get chunk statistics
+  const chunksQuery = await pool.query(
+    `SELECT
+      COUNT(dc.id) as total_chunks
+    FROM documents d
+    LEFT JOIN document_chunks dc ON d.id = dc.document_id
+    WHERE d.user_id = $1`,
+    [userId]
+  );
+
+  const docStats = documentsQuery.rows[0];
+  const chatStats = chatsQuery.rows[0];
+  const chunkStats = chunksQuery.rows[0];
+
+  return {
+    documents: {
+      total: parseInt(docStats.total_documents) || 0,
+      ready: parseInt(docStats.ready_documents) || 0,
+      processing: parseInt(docStats.processing_documents) || 0,
+      failed: parseInt(docStats.failed_documents) || 0,
+      totalStorageBytes: parseInt(docStats.total_storage_bytes) || 0,
+      firstUploadDate: docStats.first_document_date,
+    },
+    chats: {
+      total: parseInt(chatStats.total_chats) || 0,
+      totalMessages: parseInt(chatStats.total_messages) || 0,
+      lastActivity: chatStats.last_message_date,
+    },
+    chunks: {
+      total: parseInt(chunkStats.total_chunks) || 0,
+    },
+  };
+}

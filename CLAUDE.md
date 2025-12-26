@@ -152,6 +152,8 @@ npm run lint   # Run ESLint
 - `/login` - Login page (redirects to /dashboard on success)
 - `/forgot-password` - Password reset (not yet implemented)
 - `/dashboard` - Dashboard with document upload and management
+- `/settings` - User profile and account settings
+- `/chat/[id]` - Document chat interface
 
 ## API Routes
 - `POST /api/upload/presigned` - Generate presigned URL for S3 upload
@@ -159,6 +161,9 @@ npm run lint   # Run ESLint
 - `GET /api/documents/[id]` - Get document by ID
 - `DELETE /api/documents/[id]` - Delete document
 - `PATCH /api/documents/[id]` - Update document status
+- `GET /api/user/stats` - Get user account statistics (documents, chats, storage)
+- `POST /api/chat` - Create or get chat for a document
+- `POST /api/chat/message` - Send message and get AI response
 
 ## Document Upload Flow
 1. User selects/drops files on the upload component
@@ -169,17 +174,26 @@ npm run lint   # Run ESLint
 6. S3 event triggers SQS → Lambda for parsing
 7. Lambda parses document, creates chunks in DB
 8. Document status updated to `ready`
-9. Dashboard polls for status updates every 5 seconds
+9. Dashboard polls for status updates every 10 seconds (only when documents are pending/processing)
 
-## Pending Features
-- [ ] Forgot password flow
-- [ ] Lambda function for document parsing
-- [ ] Embeddings generation (OpenAI)
-- [ ] AI chat integration with RAG
-- [ ] User profile/settings
+## Features
+
+### Implemented
+- [x] Document search functionality - Real-time search across filename, file type, status, size, and date
+- [x] Smart polling - Only polls when documents are pending/processing (10s interval)
+- [x] User profile/settings page - Complete account management with:
+  - Profile information display (email, user ID, verification status)
+  - Account statistics (documents, storage, chats, activity)
+  - Change password functionality
+  - Delete account with confirmation
+- [x] Lambda function for document parsing
+- [x] Embeddings generation (OpenAI)
+- [x] AI chat integration with RAG
+
+### Pending
+- [ ] Forgot password flow (forgot password page UI - backend already implemented)
 - [ ] Subscription/payment integration
 - [ ] Social login (Google, GitHub) - buttons exist but not wired up
-- [ ] Document search functionality
 
 ## AWS Infrastructure
 

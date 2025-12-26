@@ -9,6 +9,8 @@ import {
   resendConfirmationCode as cognitoResendCode,
   forgotPassword as cognitoForgotPassword,
   confirmForgotPassword as cognitoConfirmForgotPassword,
+  changePassword as cognitoChangePassword,
+  deleteUser as cognitoDeleteUser,
   getCurrentUser,
   refreshTokens,
   parseCognitoError,
@@ -259,6 +261,55 @@ export async function confirmForgotPasswordAction(
 ): Promise<ActionResult> {
   try {
     await cognitoConfirmForgotPassword(email, code, newPassword);
+    return { success: true, data: undefined };
+  } catch (error) {
+    return {
+      success: false,
+      error: parseCognitoError(error),
+    };
+  }
+}
+
+/**
+ * Change password for authenticated user
+ */
+export async function changePasswordAction(
+  oldPassword: string,
+  newPassword: string
+): Promise<ActionResult> {
+  try {
+    const cookieStore = await cookies();
+    const accessToken = cookieStore.get(ACCESS_TOKEN_COOKIE)?.value;
+
+    if (!accessToken) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    await cognitoChangePassword(accessToken, oldPassword, newPassword);
+    return { success: true, data: undefined };
+  } catch (error) {
+    return {
+      success: false,
+      error: parseCognitoError(error),
+    };
+  }
+}
+
+/**
+ * Delete user account
+ */
+export async function deleteAccountAction(): Promise<ActionResult> {
+  try {
+    const cookieStore = await cookies();
+    const accessToken = cookieStore.get(ACCESS_TOKEN_COOKIE)?.value;
+
+    if (!accessToken) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    await cognitoDeleteUser(accessToken);
+    await clearAuthCookies();
+
     return { success: true, data: undefined };
   } catch (error) {
     return {

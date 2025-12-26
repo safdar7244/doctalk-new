@@ -8,6 +8,8 @@ import {
   ConfirmForgotPasswordCommand,
   GetUserCommand,
   GlobalSignOutCommand,
+  ChangePasswordCommand,
+  DeleteUserCommand,
   AuthFlowType,
 } from "@aws-sdk/client-cognito-identity-provider";
 
@@ -209,6 +211,36 @@ export async function confirmForgotPassword(
     Username: email,
     ConfirmationCode: code,
     Password: newPassword,
+  });
+
+  await cognitoClient.send(command);
+  return true;
+}
+
+/**
+ * Change password for authenticated user
+ */
+export async function changePassword(
+  accessToken: string,
+  oldPassword: string,
+  newPassword: string
+): Promise<boolean> {
+  const command = new ChangePasswordCommand({
+    AccessToken: accessToken,
+    PreviousPassword: oldPassword,
+    ProposedPassword: newPassword,
+  });
+
+  await cognitoClient.send(command);
+  return true;
+}
+
+/**
+ * Delete user account
+ */
+export async function deleteUser(accessToken: string): Promise<boolean> {
+  const command = new DeleteUserCommand({
+    AccessToken: accessToken,
   });
 
   await cognitoClient.send(command);

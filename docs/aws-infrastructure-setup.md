@@ -678,7 +678,8 @@ SELECT * FROM pg_extension WHERE extname = 'vector';
 | `DB_HOST` | `doctalk-db.xxxxx.us-east-1.rds.amazonaws.com` |
 | `DB_PORT` | `5432` |
 | `DB_NAME` | `doctalk` |
-| `DB_USER` | `postgres` |
+| `DB_USER` | `
+` |
 | `DB_PASSWORD` | `your-password` |
 | `S3_BUCKET` | `doctalk-documents-YOUR_ACCOUNT_ID` |
 
